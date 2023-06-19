@@ -159,7 +159,8 @@ void LinuxPerfJitLogger::OpenJitDumpFile() {
   perf_output_handle_ = fdopen(fd, "w+");
   if (perf_output_handle_ == nullptr) return;
 
-  setvbuf(perf_output_handle_, nullptr, _IOFBF, kLogBufferSize);
+  // Don't increase buffer size on Android as it results in many missing symbols
+  // setvbuf(perf_output_handle_, nullptr, _IOFBF, kLogBufferSize);
 }
 
 void LinuxPerfJitLogger::CloseJitDumpFile() {
@@ -175,8 +176,14 @@ void* LinuxPerfJitLogger::OpenMarkerFile(int fd) {
   // Mmap the file so that there is a mmap record in the perf_data file.
   //
   // The map must be PROT_EXEC to ensure it is not ignored by perf record.
+  //
+  // jnicol: however, PROT_EXEC fails to mmap on Samsung A51, and doesn't
+  // seem to be required for simpleperf to work
   void* marker_address =
-      mmap(nullptr, page_size, PROT_READ | PROT_EXEC, MAP_PRIVATE, fd, 0);
+      mmap(nullptr, page_size, PROT_READ, MAP_PRIVATE, fd, 0);
+  if (marker_address == MAP_FAILED) {
+    base::OS::PrintError("jamiedbg Failed to mmap jitdump file\n");
+  }
   return (marker_address == MAP_FAILED) ? nullptr : marker_address;
 }
 
